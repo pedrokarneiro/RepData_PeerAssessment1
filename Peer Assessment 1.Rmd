@@ -1,0 +1,260 @@
+---
+title: "Peer Assessment 1"
+author: "Pedro Carneiro Junior"
+date: "Saturday, September 19, 2015"
+output: html_document
+---
+
+* * *
+
+## Introduction
+
+The main objective of this document is to fulfill the requirements of the Coursera's Peer Assessment 1 of the Reproducible Research course (part of the Data Science Specialization track), which can be found at:
+
+- [https://class.coursera.org/repdata-032/human_grading/view/courses/975145/assessments/3/submissions], for students currently enrolled at the Reproducible Research course;
+- [Peer Assessment 1 Problem Definition, https://github.com/pedrokarneiro/RepData_PeerAssessment1/Peer Assessment 1 Problem Definition.Rmd](https://github.com/pedrokarneiro/RepData_PeerAssessment1/Peer Assessment 1 Problem Definition.Rmd), for anybody interested in this specific case study.
+
+* * *
+
+## Resolution
+
+
+#### Setting global options
+
+
+**knitr and opts_chunk**
+
+In our specific case, it is recommended to set global configurations as from what is asked in the requirements.
+
+For that, we need to set echo=TRUE globaly so that anybody will be able to read all the code chunks after processing the results. But, for having a working opts_chunk() function it is necessary that the knitr package is loaded inside the R Markdown first.
+
+```{r setoptions, echo=TRUE}
+library("knitr")
+opts_chunk$set(echo=TRUE)
+```
+
+
+#### Loading necessary packages
+
+
+**sqldf**
+
+We are going to use the sqldf package because of our preference to SQL syntax for data manipulation. So, first we test if the sqldf package is installed and if not, run the command to install it. Then we load the sqldf package to memory.
+
+```{r InstallAndLoadSQLDF}
+# If needed, installing, then loading necessary packages...
+packages <- c("sqldf")
+if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packages, rownames(installed.packages())))  
+}
+library("sqldf")
+```
+
+### Loading and preprocessing the data
+
+I decided to download the data from the source https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip, anyhow a copy of the original remains in my forked Github repository at https://github.com/pedrokarneiro/RepData_PeerAssessment1.
+
+#### Loading data
+
+As the data source file is in CSV format, then it is better to use the read.csv() function.
+
+First, let's inform the user about where his/her data is going to be stored and processed.
+
+```{r ShowWorkingDirectory}
+print(paste("A T E N T I O N :"
+            , "This is your current working directory and where all project files will be located: "
+            , getwd()))
+```
+
+Afterwards, it is healthy to clean memory in order to avoid low memory problems.
+
+```{r ClearMemory}
+# Clearing memory for calculation safety...
+rm(list=ls())
+```
+
+Then we get the file from the given URL and unzip it to the working directory. In fact, as https protocol does not fit directly into every knitr environment, specially under Windows 7 and RStudio, R produces "unsupported URL scheme" error while trying to download a zip file, it is wise to follow the recommendations informed at [http://stackoverflow.com/questions/25341285/error-when-knitr-has-to-download-a-zip-file].
+
+Note that changing the URL to http and setting file.download to mode="wb" the problem is resolved and the script can be knitted successfully.
+
+```{r DownloadingZipFile}
+fileURL <- "http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+destFilePath <- paste(getwd(), "/repdata%2Fdata%2Factivity.zip", sep="")
+download.file(fileURL, destfile=destFilePath, mode="wb")
+unzip("repdata%2Fdata%2Factivity.zip")
+list.files()
+#dateDownloaded <- date()
+#dateDownloaded
+```
+
+Finally, data is loaded into memory.
+
+```{r LoadingData}
+activityCSV <- read.csv("activity.csv")
+```
+
+#### First Analysis of the Data
+
+In order to process/transform the data (if necessary) into a format suitable for analysis, let's explore some information about the dataset.
+
+Notice that there are many NAs for the steps variable (2304 in total out of 17568 observations), and that indicates us that they may affect results and that we will have to deal with them.
+
+```{r ExploreDataHeadAndTail}
+head(activityCSV)
+tail(activityCSV)
+```
+
+```{r ExploreDataSummary}
+summary(activityCSV)
+```
+
+```{r ExploreDataStructure}
+str(activityCSV)
+```
+
+* * *
+
+### What is mean total number of steps taken per day?
+
+As recommended, we are going to ignore the NA values for the following tasks:
+
+- Calculate the total number of steps taken per day
+- Calculate and report the mean and median of the total number of steps taken per day
+- Make a histogram of the total number of steps taken each day
+
+**Calculating the total number of steps taken per day**
+
+To calculate the mean we are going to need the number of total steps per day. So we need to select the sum of steps SUM(steps) from the activityCSV data frame where the steps are not NA and then group the sums by date.
+
+```{r TotalStepsPerDay}
+totalStepsPerDay <- sqldf("SELECT date, SUM(steps) AS sum_steps_day
+                           FROM activityCSV
+                           WHERE steps <> 'NA'
+                           GROUP BY date")
+print(totalStepsPerDay)
+```
+
+**Calculating and report the mean and median of the total number of steps taken per day**
+
+```{r CalculateMeanAndMedian}
+myMean <- mean(totalStepsPerDay$sum_steps_day)
+myMedian <- median(totalStepsPerDay$sum_steps_day)
+print(paste("The daily steps calculated mean is ", myMean, " and median is ", myMedian, sep=""))
+```
+
+**Making a histogram of the total number of steps taken each day**
+
+To define number of breaks (how many bar will appear in the histogram) we need to count how many observations our totalStepsPerDay has.
+
+```{r DefiningBreaks}
+myBreaks <- sqldf("SELECT COUNT(*) AS days
+                   FROM totalStepsPerDay")
+print(myBreaks)
+```
+
+Now, plotting the histogram:
+
+```{r DailyStepsHistogram}
+myMain <- "Total Number of Steps Taken Each Day"
+myYlab <- "Frequency"
+myBreaks <- myBreaks$days
+myXlab <- "Total Steps per Day"
+
+hist(totalStepsPerDay$sum_steps_day
+     , main = myMain
+     , ylab = myYlab
+     , xlab = myXlab
+     , breaks = myBreaks
+     , col = rainbow(myBreaks)
+)
+abline(v=myMedian, col="red")
+mtext(text = paste("The red line near ", round(myMedian)," indicates the median", sep=""), side = 3, col = "red")
+```
+
+### What is the average daily activity pattern?
+
+Now, there are two tasks:
+
+- Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+
+- Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+**Make a time series plot of the 5-minute interval and the average number of steps taken, averaged across all days**
+
+```{r AvgStepsPerInterval}
+meanStepsPerInterval <- aggregate(steps ~ interval, activityCSV, mean)
+plot(meanStepsPerInterval
+     , type = "l"
+     , main = ("Daily Average of Steps per Interval")
+     , xlab = "5-minute intervals"
+     , ylab = "average number of steps taken, averaged across all days"
+     , col="blue")
+```
+
+**Reporting the 5-minute interval, on average across all the days in the dataset, that contains the maximum number of steps**
+
+```{r RptMaxSteps}
+maxAvgStepsInterval <- which.max(meanStepsPerInterval$steps)
+maxStepsInterval <- meanStepsPerInterval[maxAvgStepsInterval,]$interval
+maxSteps <- meanStepsPerInterval[maxAvgStepsInterval,]$steps
+
+# Plotting again just to show in the report
+plot(meanStepsPerInterval
+     , type = "l"
+     , main = ("Daily Average of Steps per Interval")
+     , xlab = "5-minute intervals"
+     , ylab = "average number of steps taken, averaged across all days"
+     , col="blue")
+
+abline(v=maxStepsInterval, col="red")
+mtext(text = paste("The red line on ", maxStepsInterval
+                   , " indicates the maximum number of steps (~"
+                   , round(maxSteps, digits = 2), ")"
+                   , sep="")
+      , side = 3, col = "red")
+```
+
+
+
+### Imputing missing values
+
+Note that there are a number of days/intervals where there are missing values (coded as NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
+
+Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+
+Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+
+Create a new dataset that is equal to the original dataset but with the missing data filled in.
+
+Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+### Are there differences in activity patterns between weekdays and weekends?
+
+For this part the weekdays() function may be of some help here. Use the dataset with the filled-in missing values for this part.
+
+Create a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+
+Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). See the README file in the GitHub repository to see an example of what this plot should look like using simulated data.
+
+
+## Results
+
+## Conclusion
+
+
+
+
+
+
+
+```{r}
+summary(cars)
+```
+
+You can also embed plots, for example:
+
+```{r, echo=FALSE}
+plot(cars)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
