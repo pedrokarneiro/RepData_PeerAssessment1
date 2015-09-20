@@ -11,8 +11,7 @@ output: html_document
 
 The main objective of this document is to fulfill the requirements of the Coursera's Peer Assessment 1 of the Reproducible Research course (part of the Data Science Specialization track), which can be found at:
 
-- [https://class.coursera.org/repdata-032/human_grading/view/courses/975145/assessments/3/submissions], for students currently enrolled at the Reproducible Research course;
-- [Peer Assessment 1 Problem Definition, https://github.com/pedrokarneiro/RepData_PeerAssessment1/Peer Assessment 1 Problem Definition.Rmd](https://github.com/pedrokarneiro/RepData_PeerAssessment1/Peer Assessment 1 Problem Definition.Rmd), for anybody interested in this specific case study.
+- [https://class.coursera.org/repdata-032/human_grading/view/courses/975145/assessments/3/submissions], for students currently enrolled at the Reproducible Research course and the respective teachers.
 
 * * *
 
@@ -212,49 +211,136 @@ mtext(text = paste("The red line on ", maxStepsInterval
                    , round(maxSteps, digits = 2), ")"
                    , sep="")
       , side = 3, col = "red")
+
+print(paste("The maximum number of steps is, on average (rounded to two digits precision), ", round(maxSteps, digits = 2), ", and it happens on the 5-minute interval number ", maxStepsInterval, sep=""))
+
 ```
-
-
 
 ### Imputing missing values
 
-Note that there are a number of days/intervals where there are missing values (coded as NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
+There are four tasks here:
 
-Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+- Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
 
-Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+- Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
 
-Create a new dataset that is equal to the original dataset but with the missing data filled in.
+- Create a new dataset that is equal to the original dataset but with the missing data filled in.
 
-Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+- Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+
+***Calculating and reporting the total number of missing values in the dataset (i.e. the total number of rows with NAs)***
+```{r CalculateNAs}
+incompleteCases <- activityCSV[!complete.cases(activityCSV),]
+numberOfIncompleteCases <- nrow(incompleteCases)
+print(paste("The number of incomplete cases (NAs) is: ", numberOfIncompleteCases, sep=""))
+```
+
+***Devising a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.***
+
+***Creating a new dataset that is equal to the original dataset but with the missing data filled in.***
+
+In order to fill the NAs with approximate values, we decided to change the sequence of the execution for the benefit of what is asked: First we create a new data frame named **withoutNAs** just as a copy of **activityCSV**, then we proceed replacing each NA by the mean of steps in the interval, which, in our case is represented by the data frame **meanStepsPerInterval**. For each row of **withoutNAs** (a copy of the original data frame still with NAs) and for each *steps* that is NA, we get the corresponding *interval* and then get the *steps* value from **meanStepsPerInterval** (the data frame with the steps averages) for the same *interval*, replacing the *steps* NA value with it.
+
+
+```{r FillNAs}
+# perform the imputation
+
+withoutNAs <- activityCSV
+
+for (i in 1:nrow(withoutNAs)){
+  if (is.na(withoutNAs$steps[i])){
+    activityInterval <- withoutNAs$interval[i]
+    intervalMatch <- which(meanStepsPerInterval$interval == activityInterval)
+    intlAvgSteps <- meanStepsPerInterval$steps[intervalMatch]
+    withoutNAs$steps[i] <- intlAvgSteps
+  }
+}
+
+print("Bellow we provide a small comparison between the two datasets: the original activityCSV (with NAs) and withoutNAs (the same data frame, but withoutNAs)")
+head(activityCSV)
+head(withoutNAs)
+```
+
+***Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?***
+
+```{r TotalStepsPerDay2}
+totalStepsPerDay2 <- sqldf("SELECT date, SUM(steps) AS sum_steps_day
+                           FROM withoutNAs
+                           GROUP BY date")
+print(totalStepsPerDay2)
+```
+
+Let's calculate and report the mean and median of the total number of steps taken per day of withouNAs to compare with the data from activityCSV.
+
+```{r CalculateMeanAndMedian2}
+myMean2 <- mean(totalStepsPerDay$sum_steps_day)
+myMedian2 <- median(totalStepsPerDay$sum_steps_day)
+print(paste("For activityCSV, the daily steps calculated mean is ", myMean, " and median is ", myMedian, sep=""))
+print(paste("For withoutNAs, the daily steps calculated mean is ", myMean2, " and median is ", myMedian2, sep=""))
+```
+
+**Making a histogram of the total number of steps taken each day for the new data frame without NAs (withoutNAs)**
+
+To define number of breaks (how many bar will appear in the histogram) we need to count how many observations our totalStepsPerDay2 has.
+
+```{r DefiningBreaks2}
+myBreaks2 <- sqldf("SELECT COUNT(*) AS days
+                   FROM totalStepsPerDay2")
+print(myBreaks2)
+```
+
+Now, plotting the histogram for withoutNAs and re-plotting the histogram for the original activityCSV:
+
+```{r DailyStepsHistogram2}
+myMain2 <- "Total Number of Steps Taken Each Day (without NAs)"
+myYlab2 <- "Frequency"
+myBreaks2 <- myBreaks2$days
+myXlab2 <- "Total Steps per Day"
+
+hist(totalStepsPerDay2$sum_steps_day
+     , main = myMain2
+     , ylab = myYlab2
+     , xlab = myXlab2
+     , breaks = myBreaks2
+     , col = "blue"
+)
+abline(v=myMedian2, col="red")
+mtext(text = paste("The red line near ", round(myMedian2)," indicates the median", sep=""), side = 3, col = "red")
+
+hist(totalStepsPerDay$sum_steps_day
+     , main = myMain
+     , ylab = myYlab
+     , xlab = myXlab
+     , breaks = myBreaks
+     , col = rainbow(myBreaks)
+)
+abline(v=myMedian, col="red")
+mtext(text = paste("The red line near ", round(myMedian)," indicates the median", sep=""), side = 3, col = "red")
+
+```
+
+- Do these values differ from the estimates from the first part of the assignment?
+
+Yes, despite that the mean and the median do not change, the values from the new dataset without NAs differ from the original dataset with NAs, as observed by comparing the two plots, specially regarding to the position of the greatest frequency in relation to the median.
+
+- What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+The main impact, in my evaluation, is that missing data on the estimates will give a false perspective of the frequency and of the greatest frequency in relation to the median.
+
+**So it is advised that one should not include NAs on the estimates of the total daily number of steps, in other words, the blue histogram is better (more trustworthy) than the rainbow histogram.**
 
 ### Are there differences in activity patterns between weekdays and weekends?
 
 For this part the weekdays() function may be of some help here. Use the dataset with the filled-in missing values for this part.
 
+UNDER CONSTRUCTION
+
 Create a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+
+UNDER CONSTRUCTION
 
 Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). See the README file in the GitHub repository to see an example of what this plot should look like using simulated data.
 
+UNDER CONSTRUCTION
 
-## Results
-
-## Conclusion
-
-
-
-
-
-
-
-```{r}
-summary(cars)
-```
-
-You can also embed plots, for example:
-
-```{r, echo=FALSE}
-plot(cars)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
